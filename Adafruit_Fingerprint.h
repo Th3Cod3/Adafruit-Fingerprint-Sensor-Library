@@ -68,7 +68,7 @@
 #define FINGERPRINT_HISPEEDSEARCH 0x1B
 #define FINGERPRINT_TEMPLATECOUNT 0x1D
 
-//#define FINGERPRINT_DEBUG
+
 
 #define DEFAULTTIMEOUT 1000  ///< UART reading timeout in milliseconds
 
@@ -104,11 +104,12 @@ struct Adafruit_Fingerprint_Packet {
 
 ///! Helper class to communicate with and keep state for fingerprint sensors
 class Adafruit_Fingerprint {
+
  public:
 #if defined(__AVR__) || defined(ESP8266)
-  Adafruit_Fingerprint(SoftwareSerial *ss, uint32_t password = 0x0);
+  Adafruit_Fingerprint(SoftwareSerial *ss,boolean debugShow = false, uint32_t password = 0x0);
 #endif
-  Adafruit_Fingerprint(HardwareSerial *hs, uint32_t password = 0x0);
+  Adafruit_Fingerprint(HardwareSerial *hs,boolean debugShow = false, uint32_t password = 0x0);
 
   void begin(uint32_t baud);
 
@@ -134,12 +135,14 @@ class Adafruit_Fingerprint {
   uint16_t confidence;
   /// The number of stored templates in the sensor, set by getTemplateCount()
   uint16_t templateCount;
+	/// Debug status by default it's false
+  boolean debug;
 
  private:
   uint8_t checkPassword(void);
   uint32_t thePassword;
   uint32_t theAddress;
-    uint8_t recvPacket[20];
+  uint8_t recvPacket[20];
 
   Stream *mySerial;
 #if defined(__AVR__) || defined(ESP8266)

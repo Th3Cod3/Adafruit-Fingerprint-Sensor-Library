@@ -51,9 +51,10 @@
     @param  password 32-bit integer password (default is 0)
 */
 /**************************************************************************/
-Adafruit_Fingerprint::Adafruit_Fingerprint(SoftwareSerial *ss, uint32_t password) {
+Adafruit_Fingerprint::Adafruit_Fingerprint(SoftwareSerial *ss, bool debugShow,  uint32_t password) {
   thePassword = password;
   theAddress = 0xFFFFFFFF;
+	debug = debugShow;
 
   hwSerial = NULL;
   swSerial = ss;
@@ -69,9 +70,10 @@ Adafruit_Fingerprint::Adafruit_Fingerprint(SoftwareSerial *ss, uint32_t password
 
 */
 /**************************************************************************/
-Adafruit_Fingerprint::Adafruit_Fingerprint(HardwareSerial *hs, uint32_t password) {
+Adafruit_Fingerprint::Adafruit_Fingerprint(HardwareSerial *hs, boolean debugShow, uint32_t password) {
   thePassword = password;
   theAddress = 0xFFFFFFFF;
+	debug = debugShow;
 
 #if defined(__AVR__) || defined(ESP8266)
   swSerial = NULL;
@@ -109,6 +111,7 @@ uint8_t Adafruit_Fingerprint::checkPassword(void) {
   GET_CMD_PACKET(FINGERPRINT_VERIFYPASSWORD,
                   (uint8_t)(thePassword >> 24), (uint8_t)(thePassword >> 16),
                   (uint8_t)(thePassword >> 8), (uint8_t)(thePassword & 0xFF));
+
   if (packet.data[0] == FINGERPRINT_OK)
     return FINGERPRINT_OK;
   else
@@ -283,6 +286,7 @@ void Adafruit_Fingerprint::writeStructuredPacket(const Adafruit_Fingerprint_Pack
   SERIAL_WRITE(packet.address[3]);
   SERIAL_WRITE(packet.type);
 
+
   uint16_t wire_length = packet.length + 2;
   SERIAL_WRITE_U16(wire_length);
 
@@ -293,6 +297,36 @@ void Adafruit_Fingerprint::writeStructuredPacket(const Adafruit_Fingerprint_Pack
   }
 
   SERIAL_WRITE_U16(sum);
+
+  if(debug){
+		Serial.print("\n<-S #START 0x"); Serial.print(packet.start_code, HEX);
+		Serial.print(" | #ADDRESS 0x"); Serial.print(packet.address[0], HEX);
+		Serial.print(","); Serial.print(packet.address[1], HEX);
+		Serial.print(","); Serial.print(packet.address[2], HEX);
+		Serial.print(","); Serial.print(packet.address[3], HEX);
+		Serial.print(" | #TYPE 0x");if (packet.type < 16) {Serial.print("0");} Serial.print(packet.type, HEX);
+		Serial.print(" | #LENGTH 0x");if (packet.length < 16) {Serial.print("0");} Serial.print(packet.length, HEX);
+		Serial.print(" | #DATA 0x");
+		for (uint8_t i=0; i< packet.length; i++) {
+			if (packet.data[i] < 16) {Serial.print("0");}
+			Serial.print(packet.data[i], HEX);Serial.print(",");
+		}
+
+    Serial.print("\n<-W 0x"); Serial.print(packet.start_code, HEX); Serial.print(",");
+    Serial.print(packet.address[0], HEX);Serial.print(",");
+    Serial.print(packet.address[1], HEX);Serial.print(",");
+    Serial.print(packet.address[2], HEX);Serial.print(",");
+    Serial.print(packet.address[3], HEX);Serial.print(",");
+    if (packet.type < 16) {Serial.print("0");}
+    Serial.print(packet.type, HEX);Serial.print(",");
+    if (packet.length < 16) {Serial.print("0");}
+    Serial.print(packet.length, HEX);Serial.print(",");
+    for (uint8_t i=0; i< packet.length; i++) {
+    if (packet.data[i] < 16) {Serial.print("0");}
+    Serial.print(packet.data[i], HEX);Serial.print(",");
+    }
+  }
+
   return;
 }
 
@@ -309,31 +343,36 @@ uint8_t Adafruit_Fingerprint::getStructuredPacket(Adafruit_Fingerprint_Packet * 
   uint8_t byte;
   uint16_t idx=0, timer=0;
 
+  if(debug){
+    Serial.print("\n<-R 0x");  //start showing the packet that it read
+  }
+  
   while(true) {
-    while(!mySerial->available()) {
+    while(!mySerial->available()) { // While theres no data it repeats the while or when it's times out.
       delay(1);
       timer++; 
       if( timer >= timeout) {
-#ifdef FINGERPRINT_DEBUG
-	Serial.println("Timed out");
-#endif
-	return FINGERPRINT_TIMEOUT;
+			if(debug){
+				Serial.println("\nTimed out");
+			}
+				return FINGERPRINT_TIMEOUT;
       }
     }
     byte = mySerial->read();
-#ifdef FINGERPRINT_DEBUG
-    Serial.print("<- 0x"); Serial.println(byte, HEX);
-#endif
+		if(debug){
+			if (byte < 16) {Serial.print("0");}
+			Serial.print(byte, HEX);Serial.print(',');
+		}
     switch (idx) {
       case 0:
         if (byte != (FINGERPRINT_STARTCODE >> 8)) 
-	  continue;
+	      continue;
         packet->start_code = (uint16_t)byte << 8;
         break;
       case 1:
         packet->start_code |= byte;
-        if (packet->start_code != FINGERPRINT_STARTCODE) 
-	  return FINGERPRINT_BADPACKET;
+        if (packet->start_code != FINGERPRINT_STARTCODE)
+          return FINGERPRINT_BADPACKET;
         break;
       case 2:
       case 3:
@@ -342,14 +381,14 @@ uint8_t Adafruit_Fingerprint::getStructuredPacket(Adafruit_Fingerprint_Packet * 
         packet->address[idx-2] = byte;
         break;
       case 6: 
-	packet->type = byte; 
-	break;
+	      packet->type = byte; 
+	      break;
       case 7: 
-	packet->length = (uint16_t)byte << 8; 
-	break;
+        packet->length = (uint16_t)byte << 8; 
+        break;
       case 8: 
-	packet->length |= byte; 
-	break;
+        packet->length |= byte; 
+        break;
       default:
         packet->data[idx-9] = byte;
         if((idx-8) == packet->length)
